@@ -1,0 +1,650 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Next.js App Router ベストプラクティス
+
+Next.js App RouterとServer Actionsを使用したフルスタックアプリケーション開発のためのベストプラクティスガイド。
+
+## 📁 プロジェクト構造
+
+### ファイル配置
+```
+app/
+├── (auth)/              # Route Groups - 認証関連ページ
+│   ├── login/
+│   └── signup/
+├── dashboard/           # ダッシュボード機能
+│   ├── layout.tsx       # ダッシュボード専用レイアウト
+│   └── page.tsx
+├── api/                 # API Route Handlers
+│   └── users/
+│       └── route.ts
+├── globals.css          # グローバルスタイル
+├── layout.tsx           # ルートレイアウト
+└── page.tsx             # ホームページ
+
+lib/
+├── db/                  # データベース関連（DAL）
+│   ├── index.ts         # データベース接続
+│   ├── queries.ts       # クエリ関数
+│   └── schema.ts        # スキーマ定義
+├── auth.ts              # 認証ロジック
+├── utils.ts             # ユーティリティ関数
+└── validations.ts       # バリデーションスキーマ
+
+actions/                 # Server Actions
+├── user-actions.ts      # ユーザー関連アクション
+├── post-actions.ts      # 投稿関連アクション
+└── auth-actions.ts      # 認証関連アクション
+
+components/
+├── ui/                  # UIコンポーネント
+├── forms/               # フォームコンポーネント
+└── providers/           # プロバイダーコンポーネント
+```
+
+## 🚀 Server Actions ベストプラクティス
+
+### 1. Server Action の基本構造
+```typescript
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { auth } from '@/lib/auth'
+
+// バリデーションスキーマ
+const CreatePostSchema = z.object({
+  title: z.string().min(1, 'タイトルは必須です'),
+  content: z.string().min(10, '内容は10文字以上で入力してください'),
+})
+
+export async function createPost(formData: FormData) {
+  // 1. 認証チェック
+  const user = await auth()
+  if (!user) {
+    throw new Error('認証が必要です')
+  }
+
+  // 2. データバリデーション
+  const validatedFields = CreatePostSchema.safeParse({
+    title: formData.get('title'),
+    content: formData.get('content'),
+  })
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+    }
+  }
+
+  // 3. データベース操作
+  try {
+    const post = await createPostInDB({
+      ...validatedFields.data,
+      userId: user.id,
+    })
+
+    // 4. キャッシュ再検証
+    revalidatePath('/dashboard/posts')
+    
+    return { success: true, post }
+  } catch (error) {
+    return { error: '投稿の作成に失敗しました' }
+  }
+}
+```
+
+### 2. エラーハンドリングパターン
+```typescript
+// actions/user-actions.ts
+'use server'
+
+import { z } from 'zod'
+
+type ActionResult = {
+  success?: boolean
+  error?: string
+  errors?: Record<string, string[]>
+}
+
+export async function updateProfile(
+  prevState: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    // バリデーション
+    const result = ProfileSchema.safeParse({
+      name: formData.get('name'),
+      email: formData.get('email'),
+    })
+
+    if (!result.success) {
+      return {
+        errors: result.error.flatten().fieldErrors,
+      }
+    }
+
+    // 処理実行
+    await updateUserProfile(result.data)
+    
+    revalidatePath('/profile')
+    return { success: true }
+    
+  } catch (error) {
+    console.error('Profile update failed:', error)
+    return { error: 'プロフィールの更新に失敗しました' }
+  }
+}
+```
+
+### 3. フォームとの統合（useActionState使用）
+```typescript
+// components/forms/profile-form.tsx
+'use client'
+
+import { useActionState } from 'react'
+import { updateProfile } from '@/actions/user-actions'
+
+export function ProfileForm({ user }) {
+  const [state, formAction, pending] = useActionState(updateProfile, {})
+
+  return (
+    <form action={formAction}>
+      <input 
+        name="name" 
+        defaultValue={user.name}
+        required 
+      />
+      {state.errors?.name && (
+        <p className="text-red-500">{state.errors.name[0]}</p>
+      )}
+      
+      <button type="submit" disabled={pending}>
+        {pending ? '更新中...' : '更新'}
+      </button>
+      
+      {state.error && (
+        <p className="text-red-500">{state.error}</p>
+      )}
+    </form>
+  )
+}
+```
+
+## 🗄️ DAL (Data Access Layer) パターン
+
+### 1. データベース接続とクエリ分離
+```typescript
+// lib/db/index.ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const db = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+```
+
+### 2. React Cache とServer-Only を使用したDAL
+```typescript
+// lib/db/queries.ts
+import { cache } from 'react'
+import 'server-only'
+import { db } from './index'
+import { auth } from '@/lib/auth'
+
+// ユーザー関連クエリ
+export const getCurrentUser = cache(async () => {
+  const session = await auth()
+  if (!session?.user?.id) return null
+  
+  return await db.user.findUnique({
+    where: { id: session.user.id },
+    include: { posts: true },
+  })
+})
+
+export const getUserById = cache(async (id: string) => {
+  return await db.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+    },
+  })
+})
+
+// 投稿関連クエリ
+export const getPostsByUserId = cache(async (userId: string) => {
+  return await db.post.findMany({
+    where: { userId },
+    include: {
+      author: {
+        select: { name: true, image: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+})
+
+export const getPublicPosts = cache(async (page = 1, limit = 10) => {
+  const skip = (page - 1) * limit
+  
+  return await db.post.findMany({
+    where: { published: true },
+    include: {
+      author: {
+        select: { name: true, image: true },
+      },
+    },
+    skip,
+    take: limit,
+    orderBy: { createdAt: 'desc' },
+  })
+})
+```
+
+### 3. 認証付きDAL関数
+```typescript
+// lib/db/secure-queries.ts
+import { cache } from 'react'
+import 'server-only'
+import { auth } from '@/lib/auth'
+import { db } from './index'
+
+export const getMyPosts = cache(async () => {
+  const user = await auth()
+  if (!user) throw new Error('認証が必要です')
+  
+  return await db.post.findMany({
+    where: { userId: user.id },
+    include: {
+      _count: { select: { comments: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+})
+
+export const getMyProfile = cache(async () => {
+  const user = await auth()
+  if (!user) throw new Error('認証が必要です')
+  
+  return await db.user.findUnique({
+    where: { id: user.id },
+    include: {
+      posts: { select: { id: true, title: true, published: true } },
+      _count: { select: { posts: true, comments: true } },
+    },
+  })
+})
+```
+
+## 📊 データフェッチパターン
+
+### 1. 並列データフェッチ
+```typescript
+// app/dashboard/page.tsx
+import { Suspense } from 'react'
+import { getMyPosts, getMyProfile } from '@/lib/db/secure-queries'
+
+export default async function DashboardPage() {
+  // 並列でデータを取得
+  const userPromise = getMyProfile()
+  const postsPromise = getMyPosts()
+  
+  const [user, posts] = await Promise.all([userPromise, postsPromise])
+  
+  return (
+    <div>
+      <h1>ダッシュボード</h1>
+      <UserProfile user={user} />
+      <Suspense fallback={<PostsSkeleton />}>
+        <PostsList posts={posts} />
+      </Suspense>
+    </div>
+  )
+}
+```
+
+### 2. ストリーミングとローディング状態
+```typescript
+// app/posts/page.tsx
+import { Suspense } from 'react'
+import { getPublicPosts } from '@/lib/db/queries'
+import { PostsList } from '@/components/posts-list'
+
+export default function PostsPage() {
+  return (
+    <div>
+      <h1>投稿一覧</h1>
+      <Suspense fallback={<div>読み込み中...</div>}>
+        <Posts />
+      </Suspense>
+    </div>
+  )
+}
+
+async function Posts() {
+  const posts = await getPublicPosts()
+  return <PostsList posts={posts} />
+}
+```
+
+## 🔒 セキュリティベストプラクティス
+
+### 1. 認証・認可チェック
+```typescript
+// lib/auth.ts
+import { cache } from 'react'
+import 'server-only'
+import { cookies } from 'next/headers'
+
+export const auth = cache(async () => {
+  const token = cookies().get('auth-token')?.value
+  if (!token) return null
+  
+  try {
+    // トークン検証ロジック
+    const user = await verifyToken(token)
+    return user
+  } catch {
+    return null
+  }
+})
+
+export async function requireAuth() {
+  const user = await auth()
+  if (!user) {
+    throw new Error('認証が必要です')
+  }
+  return user
+}
+```
+
+### 2. Data Security with Taint API
+```typescript
+// lib/db/secure-queries.ts
+import { experimental_taintObjectReference } from 'react'
+
+export async function getUserWithSensitiveData(id: string) {
+  const user = await db.user.findUnique({
+    where: { id },
+    include: { sensitiveInfo: true },
+  })
+  
+  if (user) {
+    // 機密データをクライアントに送信されないようにする
+    experimental_taintObjectReference(
+      'ユーザーの機密データをクライアントに送信しないでください',
+      user.sensitiveInfo
+    )
+  }
+  
+  return user
+}
+```
+
+## ⚡ パフォーマンス最適化
+
+### 1. キャッシュ戦略
+```typescript
+// lib/cache.ts
+import { unstable_cache } from 'next/cache'
+import { cache } from 'react'
+
+// Next.js キャッシュ（永続的）
+export const getCachedPosts = unstable_cache(
+  async () => {
+    return await db.post.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+    })
+  },
+  ['public-posts'],
+  {
+    revalidate: 3600, // 1時間
+    tags: ['posts'],
+  }
+)
+
+// React キャッシュ（リクエスト単位）
+export const getPostBySlug = cache(async (slug: string) => {
+  return await db.post.findUnique({
+    where: { slug },
+    include: { author: true, comments: true },
+  })
+})
+```
+
+### 2. 新しい use cache ディレクティブ（実験的）
+```typescript
+// app/static-page.tsx
+'use cache'
+import { cacheLife } from 'next/cache'
+
+export default async function StaticPage() {
+  cacheLife('hours') // キャッシュライフタイムを設定
+  
+  const data = await fetch('https://api.example.com/data')
+  return <div>{/* 静的コンテンツ */}</div>
+}
+```
+
+## 🔄 状態管理とリアルタイム更新
+
+### 1. Optimistic Updates
+```typescript
+// components/post-form.tsx
+'use client'
+
+import { useOptimistic } from 'react'
+import { createPost } from '@/actions/post-actions'
+
+export function PostForm({ posts }) {
+  const [optimisticPosts, addOptimisticPost] = useOptimistic(
+    posts,
+    (state, newPost) => [...state, newPost]
+  )
+  
+  async function formAction(formData: FormData) {
+    const newPost = {
+      id: Date.now().toString(),
+      title: formData.get('title'),
+      content: formData.get('content'),
+      pending: true,
+    }
+    
+    addOptimisticPost(newPost)
+    await createPost(formData)
+  }
+  
+  return (
+    <form action={formAction}>
+      {/* フォーム要素 */}
+    </form>
+  )
+}
+```
+
+### 2. キャッシュ再検証
+```typescript
+// actions/post-actions.ts
+'use server'
+
+import { revalidatePath, revalidateTag } from 'next/cache'
+
+export async function publishPost(postId: string) {
+  await db.post.update({
+    where: { id: postId },
+    data: { published: true },
+  })
+  
+  // 特定パスのキャッシュを無効化
+  revalidatePath('/posts')
+  revalidatePath(`/posts/${postId}`)
+  
+  // タグベースのキャッシュ無効化
+  revalidateTag('posts')
+}
+```
+
+## 📝 型安全性とバリデーション
+
+### 1. Zodスキーマ定義
+```typescript
+// lib/validations.ts
+import { z } from 'zod'
+
+export const CreatePostSchema = z.object({
+  title: z.string().min(1, 'タイトルは必須です').max(100),
+  content: z.string().min(10, '内容は10文字以上で入力してください'),
+  published: z.boolean().default(false),
+})
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1, '名前は必須です'),
+  email: z.string().email('有効なメールアドレスを入力してください'),
+  bio: z.string().max(500).optional(),
+})
+
+export type CreatePost = z.infer<typeof CreatePostSchema>
+export type UpdateUser = z.infer<typeof UpdateUserSchema>
+```
+
+### 2. 型安全なServer Actions
+```typescript
+// actions/typed-actions.ts
+'use server'
+
+import { z } from 'zod'
+import { CreatePostSchema } from '@/lib/validations'
+
+export async function createPostAction(
+  data: z.infer<typeof CreatePostSchema>
+) {
+  const validatedData = CreatePostSchema.parse(data)
+  
+  // 型安全な処理
+  await db.post.create({
+    data: validatedData,
+  })
+}
+```
+
+## 🧪 テストパターン
+
+### 1. Server Actions のテスト
+```typescript
+// __tests__/actions/post-actions.test.ts
+import { describe, it, expect, vi } from 'vitest'
+import { createPost } from '@/actions/post-actions'
+
+// モック
+vi.mock('@/lib/auth', () => ({
+  auth: vi.fn().mockResolvedValue({ id: 'user-1' }),
+}))
+
+describe('createPost', () => {
+  it('should create a post successfully', async () => {
+    const formData = new FormData()
+    formData.append('title', 'Test Post')
+    formData.append('content', 'This is a test post content.')
+    
+    const result = await createPost(formData)
+    
+    expect(result.success).toBe(true)
+    expect(result.post).toBeDefined()
+  })
+})
+```
+
+## 🚨 エラーハンドリング
+
+### 1. エラー境界とエラーページ
+```typescript
+// app/error.tsx
+'use client'
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  return (
+    <div>
+      <h2>何かが間違っています！</h2>
+      <button onClick={() => reset()}>再試行</button>
+    </div>
+  )
+}
+```
+
+### 2. グローバルエラーハンドリング
+```typescript
+// lib/error-handler.ts
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number = 500,
+    public code?: string
+  ) {
+    super(message)
+    this.name = 'AppError'
+  }
+}
+
+export function handleActionError(error: unknown) {
+  if (error instanceof AppError) {
+    return { error: error.message, code: error.code }
+  }
+  
+  console.error('Unexpected error:', error)
+  return { error: '予期しないエラーが発生しました' }
+}
+```
+
+## 🔧 開発ツールと設定
+
+### 1. Next.js 設定
+```typescript
+// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    dynamicIO: true, // 新しいキャッシュシステム
+    taint: true,     // Data Security
+  },
+  logging: {
+    fetches: {
+      fullUrl: true, // フェッチログを詳細表示
+    },
+  },
+}
+
+export default nextConfig
+```
+
+### 2. TypeScript設定
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  }
+}
+```
+
+このガイドは Next.js App Router での開発における包括的なベストプラクティスを提供します。Server Actions の効果的な使用、適切な DAL パターンの実装、そして最新の React 機能を活用したモダンな開発手法を習得できます。
+
+

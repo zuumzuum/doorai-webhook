@@ -1,11 +1,13 @@
-import { type NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
-  // Webhook APIとテストAPIは認証をスキップ
+  // Webhook API、テストAPI、デバッグAPIは認証をスキップ
   if (request.nextUrl.pathname.startsWith('/api/webhooks/') || 
-      request.nextUrl.pathname.startsWith('/api/test')) {
-    return
+      request.nextUrl.pathname.startsWith('/api/test') ||
+      request.nextUrl.pathname.startsWith('/api/debug')) {
+    console.log('🔄 Skipping middleware for:', request.nextUrl.pathname);
+    return NextResponse.next();
   }
   
   return await updateSession(request)

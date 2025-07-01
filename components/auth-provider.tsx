@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { authService } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/client';
+import { logout } from '@/actions/auth-actions';
 
 interface AuthContextType {
   user: User | null;
@@ -16,6 +17,46 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    // 初期ユーザー状態を取得
+    const getInitialUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      setLoading(false);
+    };
+
+    getInitialUser();
+
+    // 認証状態の変更をリッスン
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase.auth]);
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    await logout();
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signOut: handleSignOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -23,41 +64,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Get initial user
-    authService.getCurrentUser().then(({ data, error }) => {
-      if (!error && data.user) {
-        setUser(data.user);
-      }
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((user) => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const signOut = async () => {
-    await authService.signOut();
-    setUser(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}

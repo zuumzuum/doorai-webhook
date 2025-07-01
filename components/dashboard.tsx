@@ -264,7 +264,7 @@ export function Dashboard({ onNavigateToChat }: DashboardProps) {
           {/* View All Chats Button */}
           <div className="mt-4 pt-4 border-t border-border">
             <button 
-              onClick={() => handleChatClick()}
+              onClick={() => onNavigateToChat?.()}
               className="w-full text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
             >
               すべてのチャットを表示

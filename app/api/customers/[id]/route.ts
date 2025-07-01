@@ -4,10 +4,11 @@ import { supabase } from '@/lib/supabase';
 // GET /api/customers/[id] - Fetch specific customer
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const customerId = parseInt(params.id);
+    const { id } = await params;
+    const customerId = parseInt(id);
     
     // TODO: Implement actual Supabase query when database schema is ready
     // Example implementation:
@@ -50,10 +51,11 @@ export async function GET(
 // PATCH /api/customers/[id] - Update customer
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const customerId = parseInt(params.id);
+    const { id } = await params;
+    const customerId = parseInt(id);
     const body = await request.json();
     
     // TODO: Implement actual Supabase update when database schema is ready
@@ -98,10 +100,11 @@ export async function PATCH(
 // DELETE /api/customers/[id] - Delete customer
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const customerId = parseInt(params.id);
+    const { id } = await params;
+    const customerId = parseInt(id);
     
     // TODO: Implement actual Supabase delete when database schema is ready
     // Example implementation:

@@ -1,0 +1,310 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Next.js App Router と Supabase Auth ベストプラクティス
+
+このプロジェクトはNext.js App RouterとSupabase Authを使用したサーバーサイド認証を実装しています。以下のベストプラクティスに従ってください。
+
+## 📁 プロジェクト構造
+
+認証関連のファイル構造：
+```
+utils/supabase/
+├── client.ts      # クライアントコンポーネント用
+├── server.ts      # サーバーコンポーネント用
+└── middleware.ts  # ミドルウェア用
+
+app/
+├── middleware.ts  # ルートレベルミドルウェア
+├── login/
+│   ├── page.tsx   # ログインページ
+│   └── actions.ts # サーバーアクション
+├── auth/
+│   └── confirm/
+│       └── route.ts # 認証確認ルートハンドラー
+└── private/
+    └── page.tsx   # 認証が必要なページ
+```
+
+## 🔧 Supabaseクライアント設定
+
+### 1. 環境変数設定
+`.env.local`に以下の環境変数を設定：
+```env
+NEXT_PUBLIC_SUPABASE_URL=<your_supabase_project_url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your_supabase_anon_key>
+```
+
+### 2. クライアントコンポーネント用クライアント
+[utils/supabase/client.ts](mdc:utils/supabase/client.ts)
+```typescript
+import { createBrowserClient } from '@supabase/ssr'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+```
+
+### 3. サーバーコンポーネント用クライアント
+[utils/supabase/server.ts](mdc:utils/supabase/server.ts)
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // ミドルウェアではcookieを設定できない場合がある
+          }
+        },
+      },
+    }
+  )
+}
+```
+
+## 🛡️ ミドルウェア設定
+
+### 1. ミドルウェアユーティリティ
+[utils/supabase/middleware.ts](mdc:utils/supabase/middleware.ts)
+```typescript
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // IMPORTANT: Avoid writing any logic between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // issues with users being randomly logged out.
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (
+    !user &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/auth')
+  ) {
+    // no user, potentially respond by redirecting the user to the login page
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
+  // creating a new response object with NextResponse.next() make sure to:
+  // 1. Pass the request in it, like so:
+  //    const myNewResponse = NextResponse.next({ request })
+  // 2. Copy over the cookies, like so:
+  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
+
+  return supabaseResponse
+}
+```
+
+### 2. ルートレベルミドルウェア
+[middleware.ts](mdc:middleware.ts)
+```typescript
+import { type NextRequest } from 'next/server'
+import { updateSession } from '@/utils/supabase/middleware'
+
+export async function middleware(request: NextRequest) {
+  return await updateSession(request)
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
+```
+
+## 🔐 認証の実装
+
+### 1. サーバーアクション
+```typescript
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/utils/supabase/server'
+
+export async function login(formData: FormData) {
+  const supabase = await createClient()
+
+  const data = {
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
+  }
+
+  const { error } = await supabase.auth.signInWithPassword(data)
+
+  if (error) {
+    redirect('/error')
+  }
+
+  revalidatePath('/', 'layout')
+  redirect('/')
+}
+
+export async function signup(formData: FormData) {
+  const supabase = await createClient()
+
+  const data = {
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
+  }
+
+  const { error } = await supabase.auth.signUp(data)
+
+  if (error) {
+    redirect('/error')
+  }
+
+  revalidatePath('/', 'layout')
+  redirect('/')
+}
+```
+
+### 2. 認証確認ルートハンドラー
+```typescript
+import { type EmailOtpType } from '@supabase/supabase-js'
+import { type NextRequest } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type') as EmailOtpType | null
+  const next = searchParams.get('next') ?? '/'
+
+  if (token_hash && type) {
+    const supabase = await createClient()
+
+    const { error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash,
+    })
+
+    if (!error) {
+      redirect(next)
+    }
+  }
+
+  redirect('/error')
+}
+```
+
+## 🔒 認証状態の確認
+
+### サーバーコンポーネントでの認証確認
+```typescript
+import { redirect } from 'next/navigation'
+import { createClient } from '@/utils/supabase/server'
+
+export default async function PrivatePage() {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getUser()
+
+  if (error || !data?.user) {
+    redirect('/login')
+  }
+
+  return <p>Hello {data.user.email}</p>
+}
+```
+
+## ⚠️ 重要なセキュリティ原則
+
+### 1. 認証トークンの検証
+- **常に** `supabase.auth.getUser()` を使用してページとユーザーデータを保護
+- **絶対に** サーバーコード（ミドルウェア含む）で `supabase.auth.getSession()` を信用しない
+- `getUser()` は毎回Supabase Authサーバーにリクエストを送信して認証トークンを再検証
+
+### 2. データフェッチングのベストプラクティス
+- 認証されたデータフェッチの前に必ず `cookies()` を呼び出し
+- これによりNext.jsのキャッシュからオプトアウトし、ユーザーが自分のデータのみにアクセスできるようになる
+
+### 3. クッキーの取り扱い
+- サーバーコンポーネントはクッキーを書き込めないため、ミドルウェアで期限切れトークンの更新を行う
+- ミドルウェアは以下を担当：
+  1. 認証トークンの更新（`supabase.auth.getUser()` 呼び出し）
+  2. 更新されたトークンをサーバーコンポーネントに渡す（`request.cookies.set`）
+  3. 更新されたトークンをブラウザに渡す（`response.cookies.set`）
+
+## 📧 メールテンプレートの設定
+
+Supabaseダッシュボードの認証テンプレートページで、`Confirm signup` テンプレートの確認URLを以下に変更：
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+```
+
+## 📦 必要なパッケージ
+
+```bash
+npm install @supabase/supabase-js @supabase/ssr
+```
+
+## 🎯 実装チェックリスト
+
+- [ ] 環境変数の設定
+- [ ] Supabaseクライアントユーティリティの作成
+- [ ] ミドルウェアの設定
+- [ ] ログインページとサーバーアクションの実装
+- [ ] 認証確認ルートハンドラーの作成
+- [ ] 保護されたページでの認証状態確認
+- [ ] メールテンプレートの更新
+
+このガイドラインに従うことで、セキュアで効率的なNext.js App Router + Supabase Auth実装が可能になります。
+

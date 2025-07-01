@@ -1,14 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { Pricing } from '@/components/blocks/pricing';
 import { 
   Settings as SettingsIcon, 
   MessageSquare, 
@@ -20,85 +19,139 @@ import {
   Copy,
   Check,
   AlertCircle,
-  X
+  X,
+  Star,
+  Zap,
+  Clock,
+  TrendingUp,
+  Save,
+  Link,
+  Info
 } from 'lucide-react';
 
-const japanesePlans = [
+const features = [
   {
-    name: 'STARTER',
-    price: '29,800',
-    yearlyPrice: '25,800',
-    period: '/ 月',
-    features: [
-      { text: 'AIチャット即時応答（LINE / Web）', included: true },
-      { text: 'Instagram / Messenger 追加', included: false },
-      { text: 'AI紹介文自動生成数', value: '100/月' },
-      { text: 'KPI ダッシュボード', included: true },
-      { text: '多店舗対応', included: false },
-      { text: 'API・外部システム連携', included: false },
-      { text: '専用CS・SLA', included: false },
-      { text: '初期導入サポート', included: false },
-    ],
-    description: '個人事業主・小規模店舗に最適',
-    buttonText: '今すぐ始める',
-    href: '/sign-up',
-    isPopular: false,
+    icon: <Zap className="w-5 h-5" />,
+    title: "LINE・Webチャット即応",
+    description: "お客様からの問い合わせに24時間AI が自動対応"
   },
   {
-    name: 'PRO',
-    price: '49,800',
-    yearlyPrice: '42,800',
-    period: '/ 月',
-    features: [
-      { text: 'AIチャット即時応答（LINE / Web）', included: true },
-      { text: 'Instagram / Messenger 追加', included: true },
-      { text: 'AI紹介文自動生成数', value: '無制限' },
-      { text: 'KPI ダッシュボード', included: true },
-      { text: '多店舗対応', value: '3店舗' },
-      { text: 'API・外部システム連携', included: false },
-      { text: '専用CS・SLA', value: '優先チャット' },
-      { text: '初期導入サポート', value: 'オンラインガイド' },
-    ],
-    description: '成長中の不動産会社に理想的',
-    buttonText: '今すぐ始める',
-    href: '/sign-up',
-    isPopular: true,
+    icon: <Star className="w-5 h-5" />,
+    title: "AI 紹介文生成",
+    description: "物件の魅力を自動で分析し、売れる紹介文を生成"
   },
   {
-    name: 'ENTERPRISE',
-    price: '98,000',
-    yearlyPrice: '84,000',
-    period: '/ 月',
-    features: [
-      { text: 'AIチャット即時応答（LINE / Web）', included: true },
-      { text: 'Instagram / Messenger 追加', included: true },
-      { text: 'AI紹介文自動生成数', value: '無制限' },
-      { text: 'KPI ダッシュボード', included: true },
-      { text: '多店舗対応', value: '無制限' },
-      { text: 'API・外部システム連携', included: true },
-      { text: '専用CS・SLA', value: '専属チーム' },
-      { text: '初期導入サポート', value: '現地研修' },
-    ],
-    description: '大規模組織・特別なニーズに対応',
-    buttonText: '営業担当に相談',
-    href: '/contact',
-    isPopular: false,
+    icon: <TrendingUp className="w-5 h-5" />,
+    title: "KPI ダッシュボード",
+    description: "成約率・対応時間・顧客満足度をリアルタイム分析"
   },
-];
+  {
+    icon: <Clock className="w-5 h-5" />,
+    title: "14日間無料トライアル",
+    description: "導入前にじっくり効果を確認いただけます"
+  }
+]
+
+const includedFeatures = [
+  "LINE・Webチャット自動対応",
+  "AI物件紹介文生成（無制限）",
+  "リアルタイム分析ダッシュボード",
+  "顧客管理・追客機能",
+  "成約率向上レポート",
+  "24時間サポート対応",
+  "セキュリティ保護・データバックアップ",
+  "月次改善提案レポート"
+]
 
 export function Settings() {
-  const [lineToken, setLineToken] = useState('');
-  const [webhookUrl] = useState('https://api.doorai.com/webhook/line/abc123');
+  const [lineChannelSecret, setLineChannelSecret] = useState('');
+  const [lineAccessToken, setLineAccessToken] = useState('');
+  const [tenantId, setTenantId] = useState('demo-company'); // 実際はログインユーザーから取得
+  const [tenantName, setTenantName] = useState('デモ会社');
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [englishResponse, setEnglishResponse] = useState(true);
   const [autoBooking, setAutoBooking] = useState(true);
   const [copied, setCopied] = useState(false);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const [lineConnected, setLineConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // テナント情報の初期化
+  useEffect(() => {
+    const initializeTenantInfo = async () => {
+      try {
+        // 現在のテナント情報を取得
+        const response = await fetch('/api/tenant/current');
+        if (response.ok) {
+          const { tenant } = await response.json();
+          setTenantId(tenant.id);
+          setTenantName(tenant.name);
+                     setWebhookUrl(`https://doorai-h63zhawem-zuums-projects.vercel.app/api/webhooks/line?tenantId=${tenant.id}`);
+          
+          // 既存のLINE設定を取得
+          try {
+            const lineResponse = await fetch(`/api/settings/line?tenantId=${tenant.id}`);
+            if (lineResponse.ok) {
+              const lineData = await lineResponse.json();
+              setLineConnected(lineData.data?.isConfigured || false);
+            }
+          } catch (error) {
+            console.error('Failed to load LINE settings:', error);
+          }
+        } else {
+          throw new Error('Failed to fetch tenant info');
+        }
+      } catch (error) {
+        console.error('Failed to load tenant info:', error);
+        // エラー時の処理
+        alert('テナント情報の取得に失敗しました');
+      }
+    };
+
+    initializeTenantInfo();
+  }, []);
 
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLineConnection = async () => {
+    if (!lineChannelSecret || !lineAccessToken) {
+      alert('Channel SecretとAccess Tokenの両方を入力してください');
+      return;
+    }
+
+    setIsConnecting(true);
+    
+    try {
+      // TODO: APIエンドポイントに送信してテナント設定を保存
+      const response = await fetch('/api/settings/line', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId,
+          channelSecret: lineChannelSecret,
+          accessToken: lineAccessToken,
+        }),
+      });
+
+      if (response.ok) {
+        setLineConnected(true);
+        alert('LINE連携が正常に設定されました！');
+      } else {
+        throw new Error('設定の保存に失敗しました');
+      }
+    } catch (error) {
+      console.error('LINE connection error:', error);
+      alert('LINE連携の設定中にエラーが発生しました');
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   return (
@@ -112,66 +165,196 @@ export function Settings() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Tenant Information */}
+          <Card className="hover:shadow-lg transition-shadow duration-200">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <SettingsIcon className="w-5 h-5 text-blue-600" />
+                <span>テナント情報</span>
+              </CardTitle>
+              <CardDescription>
+                現在ログイン中の会社・店舗情報
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100">{tenantName}</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">テナントID: {tenantId}</p>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" variant="secondary">
+                    アクティブ
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">プラン</span>
+                  <span className="font-medium">無料トライアル</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">LINE連携</span>
+                  <span className={`font-medium ${lineConnected ? 'text-green-600' : 'text-red-600'}`}>
+                    {lineConnected ? '設定済み' : '未設定'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">トライアル残り</span>
+                  <span className="font-medium">12日</span>
+                </div>
+              </div>
+
+              <Button variant="outline" className="w-full">
+                <CreditCard className="w-4 h-4 mr-2" />
+                プラン変更・課金設定
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* LINE Integration */}
           <Card className="hover:shadow-lg transition-shadow duration-200">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <MessageSquare className="w-5 h-5 text-green-600" />
-                <span>LINE連携設定</span>
+                <span>LINE公式アカウント連携</span>
               </CardTitle>
+              <CardDescription>
+                あなたのLINE公式アカウントにDoorAI自動応答機能を追加します
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Channel Access Token
-                </label>
-                <div className="flex space-x-2">
-                  <Input
-                    type="password"
-                    value={lineToken}
-                    onChange={(e) => setLineToken(e.target.value)}
-                    placeholder="Channel Access Tokenを入力"
-                    className="flex-1"
-                  />
-                  <Button variant="outline">
-                    <Key className="w-4 h-4" />
-                  </Button>
+              {/* ステップ1: Webhook URL */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100">Webhook URL をコピー</h4>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Webhook URL
-                </label>
                 <div className="flex space-x-2">
                   <Input
                     value={webhookUrl}
                     readOnly
-                    className="flex-1 bg-muted"
+                    className="flex-1 bg-white dark:bg-gray-800 text-xs"
                   />
-                  <Button variant="outline" onClick={copyWebhookUrl}>
+                  <Button variant="outline" size="sm" onClick={copyWebhookUrl}>
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  このURLをLINE Developersコンソールに設定してください
-                </p>
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div>
-                  <p className="text-sm font-medium text-green-900 dark:text-green-100">接続ステータス</p>
-                  <p className="text-xs text-green-700 dark:text-green-300">正常に接続されています</p>
+              {/* ステップ2: LINE Console設定 */}
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg space-y-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-amber-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                  <h4 className="font-medium text-amber-900 dark:text-amber-100">LINE Developers Console で設定</h4>
                 </div>
-                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" variant="secondary">
-                  接続中
+                <div className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+                  <p>• Messaging API → Webhook URL に上記URLをペースト</p>
+                  <p>• Webhook送信を「利用する」に設定</p>
+                  <p>• 応答メッセージを「利用しない」に設定</p>
+                </div>
+                <Button variant="outline" size="sm" className="w-full">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  LINE Developers Console を開く
+                </Button>
+              </div>
+
+              {/* ステップ3: 認証情報入力 */}
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg space-y-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                  <h4 className="font-medium text-green-900 dark:text-green-100">認証情報を入力</h4>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Channel Secret
+                    </label>
+                    <Input
+                      type="password"
+                      value={lineChannelSecret}
+                      onChange={(e) => setLineChannelSecret(e.target.value)}
+                      placeholder="LINE Developersから取得したChannel Secret"
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Channel Access Token
+                    </label>
+                    <Input
+                      type="password"
+                      value={lineAccessToken}
+                      onChange={(e) => setLineAccessToken(e.target.value)}
+                      placeholder="LINE Developersから取得したAccess Token"
+                      className="w-full"
+                    />
+                  </div>
+
+                  <Button 
+                    onClick={handleLineConnection}
+                    disabled={isConnecting || !lineChannelSecret || !lineAccessToken}
+                    className="w-full"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        連携中...
+                      </>
+                    ) : (
+                      <>
+                        <Link className="w-4 h-4 mr-2" />
+                        LINE Bot を連携開始
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* 接続ステータス */}
+              <div className={`flex items-center justify-between p-3 rounded-lg ${
+                lineConnected 
+                  ? 'bg-green-50 dark:bg-green-900/20' 
+                  : 'bg-gray-50 dark:bg-gray-900/20'
+              }`}>
+                <div>
+                  <p className={`text-sm font-medium ${
+                    lineConnected 
+                      ? 'text-green-900 dark:text-green-100' 
+                      : 'text-gray-900 dark:text-gray-100'
+                  }`}>
+                    接続ステータス
+                  </p>
+                  <p className={`text-xs ${
+                    lineConnected 
+                      ? 'text-green-700 dark:text-green-300' 
+                      : 'text-gray-700 dark:text-gray-300'
+                  }`}>
+                    {lineConnected ? '正常に接続されています' : '未接続'}
+                  </p>
+                </div>
+                <Badge 
+                  className={lineConnected 
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                    : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+                  } 
+                  variant="secondary"
+                >
+                  {lineConnected ? '接続中' : '未接続'}
                 </Badge>
               </div>
 
-              <Button variant="outline" className="w-full">
-                <ExternalLink className="w-4 h-4 mr-2" />
-                LINE Developersで設定
-              </Button>
+              {/* ヘルプ情報 */}
+              <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-medium mb-1">設定でお困りの場合</p>
+                  <p>詳細な設定手順は<a href="#" className="underline">こちらのガイド</a>をご確認ください。</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -198,7 +381,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-foreground">自動内見予約</p>
-                  <p className="text-sm text-muted-foreground">条件に合う物件の内見予約を自動送信</p>
+                  <p className="text-sm text-muted-foreground">空いている時間に自動で内見予約</p>
                 </div>
                 <Switch
                   checked={autoBooking}
@@ -207,25 +390,19 @@ export function Settings() {
               </div>
 
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">言語検知機能</p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      顧客のメッセージを自動で判定し、適切な言語で応答します
-                    </p>
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertCircle className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">多言語応答状況</span>
+                </div>
+                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                  <div className="flex justify-between">
+                    <span>今月の英語応答:</span>
+                    <span className="font-medium">127件</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="font-bold text-lg text-foreground">75%</div>
-                  <div className="text-muted-foreground">日本語対応</div>
-                </div>
-                <div className="text-center p-3 bg-muted rounded-lg">
-                  <div className="font-bold text-lg text-foreground">25%</div>
-                  <div className="text-muted-foreground">英語対応</div>
+                  <div className="flex justify-between">
+                    <span>平均応答時間:</span>
+                    <span className="font-medium">0.8秒</span>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -235,7 +412,7 @@ export function Settings() {
           <Card className="hover:shadow-lg transition-shadow duration-200">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-red-600" />
+                <Calendar className="w-5 h-5 text-orange-600" />
                 <span>Google Calendar連携</span>
               </CardTitle>
             </CardHeader>
@@ -295,8 +472,8 @@ export function Settings() {
               <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg border">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="font-semibold text-foreground">プロプラン</h3>
-                    <p className="text-sm text-muted-foreground">月額 ¥30,000</p>
+                    <h3 className="font-semibold text-foreground">DoorAI Pro</h3>
+                    <p className="text-sm text-muted-foreground">月額 ¥29,800（税込）</p>
                   </div>
                   <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" variant="secondary">
                     アクティブ
@@ -320,19 +497,19 @@ export function Settings() {
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li className="flex items-center space-x-2">
                     <Check className="w-4 h-4 text-green-500" />
-                    <span>無制限の問い合わせ対応</span>
+                    <span>24時間AI自動対応</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <Check className="w-4 h-4 text-green-500" />
-                    <span>多言語対応（日本語・英語）</span>
+                    <span>AI物件紹介文生成（無制限）</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <Check className="w-4 h-4 text-green-500" />
-                    <span>詳細アナリティクス</span>
+                    <span>リアルタイム分析ダッシュボード</span>
                   </li>
                   <li className="flex items-center space-x-2">
                     <Check className="w-4 h-4 text-green-500" />
-                    <span>優先サポート</span>
+                    <span>24時間サポート対応</span>
                   </li>
                 </ul>
               </div>
@@ -409,7 +586,7 @@ export function Settings() {
       {/* Pricing Dialog */}
       {showPricing && (
         <Dialog open={true} onOpenChange={setShowPricing}>
-          <DialogContent className="max-w-7xl max-h-[90vh] p-0 border-0 bg-background rounded-2xl shadow-2xl overflow-hidden">
+          <DialogContent className="max-w-lg p-0 border-0 bg-background rounded-2xl shadow-2xl overflow-hidden">
             <VisuallyHidden>
               <DialogTitle>プラン変更</DialogTitle>
             </VisuallyHidden>
@@ -422,12 +599,82 @@ export function Settings() {
               >
                 <X className="w-4 h-4" />
               </Button>
-              <div className="overflow-y-auto max-h-[90vh]">
-                <Pricing
-                  plans={japanesePlans}
-                  title="プラン変更"
-                  description="現在のプランを変更して、より多くの機能をご利用ください\nアップグレードは即座に反映され、ダウングレードは次回請求日から適用されます"
-                />
+              
+              <div className="p-6">
+                {/* ヘッダー */}
+                <div className="text-center mb-8">
+                  <Badge className="mb-4 bg-primary/10 text-primary px-4 py-2">
+                    月3万円で24h働くウルトラ営業マン
+                  </Badge>
+                  <h2 className="text-2xl font-bold text-foreground mb-2">
+                    プラン変更
+                  </h2>
+                  <p className="text-muted-foreground">
+                    シンプルで透明な料金体系
+                  </p>
+                </div>
+
+                {/* メインプライシングカード */}
+                <Card className="relative overflow-hidden border-2 border-primary shadow-lg">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-primary/80"></div>
+                  
+                  <CardHeader className="text-center pt-6 pb-4">
+                    <Badge className="mb-3 bg-primary text-primary-foreground w-fit mx-auto px-3 py-1">
+                      おすすめ
+                    </Badge>
+                    <CardTitle className="text-2xl font-bold text-foreground">DoorAI Pro</CardTitle>
+                    <CardDescription className="text-sm mt-1">
+                      不動産仲介業務を完全自動化
+                    </CardDescription>
+                    <div className="mt-4">
+                      <div className="flex items-center justify-center">
+                        <span className="text-4xl font-bold text-primary">¥29,800</span>
+                        <span className="text-lg text-muted-foreground ml-2">/ 月</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">税込み・初期費用なし</p>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="px-6 pb-4">
+                    <div className="space-y-3 mb-4">
+                      {features.map((feature, index) => (
+                        <div key={index} className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                            {feature.icon}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground">{feature.title}</h4>
+                            <p className="text-xs text-muted-foreground">{feature.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-semibold text-foreground mb-2">含まれる機能：</h4>
+                      <div className="space-y-1">
+                        {includedFeatures.slice(0, 6).map((feature, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <Check className="w-3 h-3 text-primary flex-shrink-0" />
+                            <span className="text-xs text-foreground">{feature}</span>
+                          </div>
+                        ))}
+                        <p className="text-xs text-muted-foreground mt-2">他2つの機能も含まれます</p>
+                      </div>
+                    </div>
+                  </CardContent>
+
+                  <CardFooter className="px-6 pb-6">
+                    <div className="w-full space-y-2">
+                      <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-10 font-semibold rounded-lg">
+                        このプランに変更
+                      </Button>
+                      <p className="text-xs text-center text-muted-foreground">
+                        変更は即座に反映されます
+                      </p>
+                    </div>
+                  </CardFooter>
+                </Card>
               </div>
             </div>
           </DialogContent>
