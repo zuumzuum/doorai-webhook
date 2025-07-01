@@ -20,21 +20,42 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  
+  // 環境変数チェック - クライアントサイドでのみ実行
+  const [supabase, setSupabase] = useState<any>(null);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const client = createClient();
+        setSupabase(client);
+      } catch (error) {
+        console.error('Failed to create Supabase client:', error);
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
+    if (!supabase) return;
+    
     // 初期ユーザー状態を取得
     const getInitialUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setLoading(false);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to get user:', error);
+        setLoading(false);
+      }
     };
 
     getInitialUser();
 
     // 認証状態の変更をリッスン
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: any, session: any) => {
         setUser(session?.user ?? null);
         setLoading(false);
       }
@@ -43,9 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [supabase]);
 
   const handleSignOut = async () => {
+    if (!supabase) return;
     setLoading(true);
     await logout();
   };
