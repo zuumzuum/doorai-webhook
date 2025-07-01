@@ -92,7 +92,7 @@ export function Settings() {
           if (data.success && data.tenant) {
             setTenantId(data.tenant.id);
             setTenantName(data.tenant.name || `テナント-${data.tenant.id}`);
-            setWebhookUrl(`https://project-21g74xbld-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
+            setWebhookUrl(`https://project-qcydeydbv-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
             
             // 既存のLINE設定を取得
             try {
@@ -108,7 +108,7 @@ export function Settings() {
             // 旧形式のレスポンス対応
             setTenantId(data.tenant.id);
             setTenantName(data.tenant.name || `テナント-${data.tenant.id}`);
-            setWebhookUrl(`https://project-21g74xbld-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
+            setWebhookUrl(`https://project-qcydeydbv-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
           } else {
             throw new Error('Invalid tenant data structure');
           }

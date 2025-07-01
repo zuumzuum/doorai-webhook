@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
     method: 'GET',
     timestamp: new Date().toISOString(),
     status: 'active'
+  }, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'X-Bypass-Auth': 'true',
+      'Content-Type': 'application/json'
+    }
   });
 }
 

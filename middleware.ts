@@ -12,9 +12,11 @@ export async function middleware(request: NextRequest) {
       pathname === '/api/line-webhook') {
     console.log('🔄 Skipping middleware for:', pathname);
     console.log('🔄 Request URL:', request.url);
+    // 完全にミドルウェアをバイパス
     return NextResponse.next();
   }
   
+  // その他のパスでは通常の認証フローを実行
   return await updateSession(request)
 }
 
@@ -23,10 +25,12 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - _next/image (image optimization files) 
      * - favicon.ico (favicon file)
      * - *.svg, *.png, *.jpg, *.jpeg, *.gif, *.webp (static image files)
+     * - api/line-webhook (LINE webhook endpoint)
+     * - api/webhooks/ (webhook endpoints)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/line-webhook|api/webhooks/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 } 
