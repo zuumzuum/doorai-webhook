@@ -1,10 +1,17 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/line-webhook",
-      "destination": "/api/line-webhook"
+  "functions": {
+    "app/api/line-webhook/route.ts": {
+      "runtime": "nodejs18.x"
+    },
+    "app/api/webhooks/line/route.ts": {
+      "runtime": "nodejs18.x"
     }
-  ],
+  },
+  "build": {
+    "env": {
+      "VERCEL_FORCE_NO_BUILD_CACHE": "1"
+    }
+  },
   "headers": [
     {
       "source": "/api/line-webhook",
@@ -14,12 +21,12 @@
           "value": "*"
         },
         {
-          "key": "Access-Control-Allow-Methods", 
+          "key": "Access-Control-Allow-Methods",
           "value": "GET, POST, OPTIONS"
         },
         {
           "key": "Cache-Control",
-          "value": "no-store"
+          "value": "no-store, no-cache"
         }
       ]
     },
@@ -36,7 +43,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "no-store"
+          "value": "no-store, no-cache"
         }
       ]
     }
