@@ -13,6 +13,11 @@ export async function GET(request: NextRequest) {
     method: 'GET',
     timestamp: new Date().toISOString(),
     status: 'active'
+  }, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex'
+    }
   });
 }
 
@@ -23,11 +28,27 @@ export async function POST(request: NextRequest) {
   console.log(`🚀 LINE Webhook POST request received for tenant: ${tenantId}`);
   console.log(`🕐 Timestamp: ${new Date().toISOString()}`);
   
+  // 認証不要のSupabaseクライアントを作成
+  let supabase: any = null;
+  
   try {
     if (!tenantId) {
       console.error('❌ Tenant ID is required');
       return new NextResponse('Tenant ID required', { status: 400 });
     }
+    
+    // 環境変数の確認
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('❌ Supabase credentials not configured');
+      return new NextResponse('Server configuration error', { status: 500 });
+    }
+    
+    // Supabaseクライアントを作成
+    const { createClient } = await import('@supabase/supabase-js');
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
     
     // リクエストヘッダーの詳細ログ
     const headers = Object.fromEntries(request.headers.entries());
@@ -43,16 +64,25 @@ export async function POST(request: NextRequest) {
     console.log('📄 Raw request body:', body);
     
     // テナント設定を取得
-    const { tenantService } = await import('@/lib/db/tenants');
-    
     let channelSecret: string;
     let accessToken: string;
     
     try {
       console.log(`🔍 Getting tenant settings for: ${tenantId}`);
-      const settings = await tenantService.getTenantLineSettings(tenantId);
-      channelSecret = settings.channelSecret || '';
-      accessToken = settings.accessToken || '';
+      
+      const { data, error } = await supabase
+        .from('tenants')
+        .select('line_channel_secret, line_channel_access_token')
+        .eq('id', tenantId)
+        .single();
+      
+      if (error) {
+        console.error('❌ Database error:', error);
+        return new NextResponse('Tenant not found', { status: 404 });
+      }
+      
+      channelSecret = data?.line_channel_secret || '';
+      accessToken = data?.line_channel_access_token || '';
 
       console.log('🔧 Channel Secret length:', channelSecret.length);
       console.log('🔧 Access Token length:', accessToken.length);
@@ -145,8 +175,31 @@ export async function POST(request: NextRequest) {
           // データベースに会話履歴を保存
           try {
             if (userId) {
-              await tenantService.saveConversation(tenantId, userId, userMessage, replyMessage);
-              await tenantService.upsertLineUser(tenantId, userId);
+              // 会話履歴を保存
+              await supabase
+                .from('conversations')
+                .insert({
+                  tenant_id: tenantId,
+                  user_id: userId,
+                  message_type: 'text',
+                  user_message: userMessage,
+                  bot_reply: replyMessage,
+                  metadata: {},
+                  created_at: new Date().toISOString(),
+                });
+              
+              // LINEユーザー情報を更新
+              const now = new Date().toISOString();
+              await supabase
+                .from('line_users')
+                .upsert({
+                  tenant_id: tenantId,
+                  line_user_id: userId,
+                  is_blocked: false,
+                  last_interaction_at: now,
+                  updated_at: now,
+                });
+              
               console.log('✅ Conversation saved to database');
             } else {
               console.log('⚠️ No user ID available, skipping database save');

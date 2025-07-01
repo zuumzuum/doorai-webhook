@@ -83,29 +83,50 @@ export function Settings() {
       try {
         // 現在のテナント情報を取得
         const response = await fetch('/api/tenant/current');
+        console.log('Tenant API response status:', response.status);
+        
         if (response.ok) {
-          const { tenant } = await response.json();
-          setTenantId(tenant.id);
-          setTenantName(tenant.name);
-                     setWebhookUrl(`https://doorai-h63zhawem-zuums-projects.vercel.app/api/webhooks/line?tenantId=${tenant.id}`);
+          const data = await response.json();
+          console.log('Tenant API response data:', data);
           
-          // 既存のLINE設定を取得
-          try {
-            const lineResponse = await fetch(`/api/settings/line?tenantId=${tenant.id}`);
-            if (lineResponse.ok) {
-              const lineData = await lineResponse.json();
-              setLineConnected(lineData.data?.isConfigured || false);
+          if (data.success && data.tenant) {
+            setTenantId(data.tenant.id);
+            setTenantName(data.tenant.name || `テナント-${data.tenant.id}`);
+            setWebhookUrl(`https://project-21g74xbld-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
+            
+            // 既存のLINE設定を取得
+            try {
+              const lineResponse = await fetch(`/api/settings/line?tenantId=${data.tenant.id}`);
+              if (lineResponse.ok) {
+                const lineData = await lineResponse.json();
+                setLineConnected(lineData.data?.isConfigured || false);
+              }
+            } catch (error) {
+              console.error('Failed to load LINE settings:', error);
             }
-          } catch (error) {
-            console.error('Failed to load LINE settings:', error);
+          } else if (data.tenant) {
+            // 旧形式のレスポンス対応
+            setTenantId(data.tenant.id);
+            setTenantName(data.tenant.name || `テナント-${data.tenant.id}`);
+            setWebhookUrl(`https://project-21g74xbld-zuums-projects.vercel.app/api/line-webhook?tenantId=${data.tenant.id}`);
+          } else {
+            throw new Error('Invalid tenant data structure');
           }
         } else {
-          throw new Error('Failed to fetch tenant info');
+          const errorData = await response.text();
+          console.error('Tenant API error:', response.status, errorData);
+          
+          if (response.status === 401) {
+            alert('認証が必要です。ログインしてください。');
+          } else if (response.status === 404) {
+            alert('テナント情報が見つかりません。新規ユーザーの場合は、テナントの作成が必要です。');
+          } else {
+            alert(`テナント情報の取得に失敗しました (${response.status})`);
+          }
         }
       } catch (error) {
         console.error('Failed to load tenant info:', error);
-        // エラー時の処理
-        alert('テナント情報の取得に失敗しました');
+        alert('ネットワークエラー: テナント情報の取得に失敗しました');
       }
     };
 

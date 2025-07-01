@@ -2,11 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
   // Webhook API、テストAPI、デバッグAPIは認証をスキップ
-  if (request.nextUrl.pathname.startsWith('/api/webhooks/') || 
-      request.nextUrl.pathname.startsWith('/api/test') ||
-      request.nextUrl.pathname.startsWith('/api/debug')) {
-    console.log('🔄 Skipping middleware for:', request.nextUrl.pathname);
+  if (pathname.startsWith('/api/webhooks/') || 
+      pathname.startsWith('/api/test') ||
+      pathname.startsWith('/api/debug') ||
+      pathname === '/api/webhooks/line' ||
+      pathname === '/api/line-webhook') {
+    console.log('🔄 Skipping middleware for:', pathname);
+    console.log('🔄 Request URL:', request.url);
     return NextResponse.next();
   }
   

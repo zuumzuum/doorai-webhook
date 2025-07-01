@@ -23,21 +23,87 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
     
-    // ユーザーのテナント情報を取得
-    const { data: tenant, error: tenantError } = await supabase
-      .from('tenants')
-      .select('id, name, created_at')
-      .eq('owner_id', user.id)
-      .single();
+    // ユーザーのテナント情報を取得（tenant_usersテーブル経由）
+    let { data: tenantUsers, error: tenantError } = await supabase
+      .from('tenant_users')
+      .select(`
+        *,
+        tenants (
+          id,
+          name,
+          created_at,
+          subscription_status,
+          trial_ends_at
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('role', 'owner');
     
-    if (tenantError) {
+    let tenant = null;
+    
+    // テナントが存在しない場合は新規作成
+    if (!tenantUsers || tenantUsers.length === 0) {
+      console.log('Creating new tenant for user:', user.id);
+      
+      // 新しいテナントID生成
+      const newTenantId = crypto.randomUUID();
+      
+      // テナントを作成
+      const { data: newTenant, error: createTenantError } = await supabase
+        .from('tenants')
+        .insert({
+          id: newTenantId,
+          name: user.email?.split('@')[0] || 'マイテナント',
+          subscription_status: 'trial',
+          trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // 14日後
+        })
+        .select('id, name, created_at')
+        .single();
+      
+      if (createTenantError) {
+        console.error('Failed to create tenant:', createTenantError);
+        return NextResponse.json({ 
+          error: 'Failed to create tenant',
+          message: createTenantError.message
+        }, { status: 500 });
+      }
+      
+      // ユーザーをオーナーとして関連付け
+      const { error: linkError } = await supabase
+        .from('tenant_users')
+        .insert({
+          user_id: user.id,
+          tenant_id: newTenantId,
+          role: 'owner'
+        });
+      
+      if (linkError) {
+        console.error('Failed to link user to tenant:', linkError);
+        return NextResponse.json({ 
+          error: 'Failed to link user to tenant',
+          message: linkError.message
+        }, { status: 500 });
+      }
+      
+      tenant = newTenant;
+    } else if (tenantError) {
       console.error('Tenant fetch error:', tenantError);
       return NextResponse.json({ 
         error: 'Tenant not found',
-        message: 'No tenant associated with this user'
+        message: 'Failed to fetch tenant information'
       }, { status: 404 });
+    } else {
+      // 既存のテナント情報を取得
+      tenant = tenantUsers[0].tenants;
     }
     
+    if (!tenant) {
+      return NextResponse.json({ 
+        error: 'Tenant not found',
+        message: 'Failed to retrieve tenant information'
+      }, { status: 404 });
+    }
+
     return NextResponse.json({
       success: true,
       tenant: {
