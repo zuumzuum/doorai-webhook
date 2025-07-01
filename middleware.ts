@@ -3,6 +3,7 @@ import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const url = request.nextUrl.clone();
   
   // Webhook API、テストAPI、デバッグAPIは認証をスキップ
   if (pathname.startsWith('/api/webhooks/') || 
@@ -12,8 +13,15 @@ export async function middleware(request: NextRequest) {
       pathname === '/api/line-webhook') {
     console.log('🔄 Skipping middleware for:', pathname);
     console.log('🔄 Request URL:', request.url);
-    // 完全にミドルウェアをバイパス
-    return NextResponse.next();
+    
+    // CORS対応ヘッダーを追加
+    const response = NextResponse.next();
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'X-Line-Signature, Content-Type');
+    response.headers.set('Cache-Control', 'no-store, no-cache');
+    
+    return response;
   }
   
   // その他のパスでは通常の認証フローを実行

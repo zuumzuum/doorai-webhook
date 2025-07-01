@@ -36,7 +36,8 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/api/line-webhook',
+        // LINE Webhook専用設定
+        source: '/api/webhooks/line',
         headers: [
           {
             key: 'Access-Control-Allow-Origin',
@@ -47,13 +48,44 @@ const nextConfig = {
             value: 'GET, POST, OPTIONS'
           },
           {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-Line-Signature, Content-Type, Authorization'
+          },
+          {
             key: 'Cache-Control',
-            value: 'no-store, no-cache'
+            value: 'no-store, no-cache, must-revalidate'
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow'
           }
         ]
       },
       {
+        // 全てのWebhook API
         source: '/api/webhooks/(.*)',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*'
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, OPTIONS'
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-Line-Signature, Content-Type, Authorization'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
+          }
+        ]
+      },
+      {
+        // デバッグAPI
+        source: '/api/debug/(.*)',
         headers: [
           {
             key: 'Access-Control-Allow-Origin',
