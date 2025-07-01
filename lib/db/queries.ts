@@ -291,33 +291,55 @@ export const getDashboardKPIs = cache(async () => {
 
 // Helper function to get current user's tenant_id
 export async function getCurrentTenantId(): Promise<string | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) return null;
-  
-  const { data } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .single();
+  try {
+    // 環境変数チェック
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('Supabase credentials not configured');
+      return null;
+    }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
     
-  return data?.tenant_id || null;
+    if (!user) return null;
+    
+    const { data } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+      
+    return data?.tenant_id || null;
+  } catch (error) {
+    console.error('Error getting tenant ID:', error);
+    return null;
+  }
 }
 
 // Tenant queries
 export async function getTenant(): Promise<Tenant | null> {
-  const tenantId = await getCurrentTenantId();
-  if (!tenantId) return null;
-  
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('id', tenantId)
-    .single();
+  try {
+    // 環境変数チェック
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('Supabase credentials not configured');
+      return null;
+    }
+
+    const tenantId = await getCurrentTenantId();
+    if (!tenantId) return null;
     
-  return data;
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('tenants')
+      .select('*')
+      .eq('id', tenantId)
+      .single();
+      
+    return data;
+  } catch (error) {
+    console.error('Error getting tenant:', error);
+    return null;
+  }
 }
 
 export async function updateTenant(updates: Partial<Tenant>): Promise<Tenant | null> {
