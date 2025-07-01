@@ -1,17 +1,4 @@
 {
-  "functions": {
-    "app/api/line-webhook/route.ts": {
-      "runtime": "nodejs18.x"
-    },
-    "app/api/webhooks/line/route.ts": {
-      "runtime": "nodejs18.x"
-    }
-  },
-  "build": {
-    "env": {
-      "VERCEL_FORCE_NO_BUILD_CACHE": "1"
-    }
-  },
   "headers": [
     {
       "source": "/api/line-webhook",
