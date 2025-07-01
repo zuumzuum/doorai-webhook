@@ -7,6 +7,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: { unoptimized: true },
+  serverExternalPackages: ['@supabase/supabase-js'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -31,6 +32,41 @@ const nextConfig = {
     });
     return config;
   },
+  // Vercel authentication bypass headers
+  async headers() {
+    return [
+      {
+        source: '/api/line-webhook',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*'
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, OPTIONS'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache'
+          }
+        ]
+      },
+      {
+        source: '/api/webhooks/(.*)',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*'
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, OPTIONS'
+          }
+        ]
+      }
+    ]
+  }
 };
 
 module.exports = nextConfig;

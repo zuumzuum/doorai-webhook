@@ -26,7 +26,8 @@ import {
   TrendingUp,
   Save,
   Link,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 
 const features = [
@@ -261,6 +262,31 @@ export function Settings() {
                   <Button variant="outline" size="sm" onClick={copyWebhookUrl}>
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
+                </div>
+                
+                {/* Vercel認証問題の警告 */}
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-red-900 dark:text-red-100 mb-1">
+                        ⚠️ Vercel認証エラーが発生中
+                      </p>
+                      <p className="text-red-800 dark:text-red-200 mb-2">
+                        現在上記URLにアクセスするとログイン画面が表示されます。以下の手順で解決してください：
+                      </p>
+                      <div className="text-red-800 dark:text-red-200 space-y-1 text-xs">
+                        <p><strong>1. Vercelダッシュボードで修正：</strong></p>
+                        <p className="ml-3">• vercel.com/dashboard → プロジェクト → Settings → Security</p>
+                        <p className="ml-3">• "Vercel Authentication" を無効化</p>
+                        <p><strong>2. または新しいプロジェクト作成：</strong></p>
+                        <p className="ml-3">• 認証設定なしで新規Vercelプロジェクトを作成</p>
+                        <p><strong>3. 緊急時はローカル環境：</strong></p>
+                        <p className="ml-3">• ngrok http 3000 でトンネル作成</p>
+                        <p className="ml-3">• ngrok URLをLINEコンソールに設定</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

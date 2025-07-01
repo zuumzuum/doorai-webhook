@@ -1,229 +1,200 @@
-# DoorAI - 不動産仲介業向けSaaS
+# 🏠 DoorAI - 不動産営業自動化SaaS
 
-## 概要
+DoorAIは不動産業界向けのLINE Bot自動化プラットフォームです。顧客からの問い合わせに自動で応答し、物件情報の提供や営業プロセスを効率化します。
 
-DoorAIは不動産仲介業向けのAI営業自動化SaaSです。LINEとWebチャットでの24時間自動応答、物件管理、顧客管理、KPIダッシュボードを提供します。
+## ✨ 主な機能
 
-## 主な機能
+### 🤖 LINE Bot自動応答
+- **挨拶対応**: 「こんにちは」「hello」などの挨拶メッセージに自動返信
+- **物件相談**: 「物件」「賃貸」などのキーワードで物件提案を自動送信
+- **感謝応答**: 「ありがとう」メッセージに適切な返信
+- **汎用対応**: その他の質問に受信確認と相談案内を自動送信
 
-- 🤖 **LINE自動応答**: GPT-4o搭載のAI営業担当者
-- 💬 **Webチャット**: ウェブサイト埋め込み型チャットウィジェット
-- 🏠 **物件管理**: 物件登録・編集・AI紹介文生成
-- 👥 **顧客管理**: 顧客データ・HotScore自動計算
-- 📊 **KPIダッシュボード**: リアルタイム分析・レポート機能
-- 📅 **内見予約**: Google Calendar連携
+### 🏢 マルチテナント対応
+- **独立運用**: 各不動産会社が独自のLINE Botを運用可能
+- **動的設定**: テナント毎にChannel Secret、Access Tokenを個別設定
+- **スケーラブル**: 新規テナント追加時のデプロイ不要
 
-## 技術スタック
+### 📊 顧客管理
+- **会話履歴**: LINEでの全てのやり取りをデータベースに保存
+- **ユーザー管理**: LINEユーザー情報の自動収集・管理
+- **分析機能**: 顧客との対話データの分析・可視化
 
-- **Frontend**: Next.js 15, React 19, TypeScript
-- **UI**: shadcn/ui, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL)
-- **AI**: OpenAI GPT-4o
-- **Chat**: LINE Messaging API
-- **認証**: Supabase Auth
-- **決済**: Stripe (予定)
+### 🔐 セキュリティ
+- **署名検証**: LINE Webhookの署名を必ず検証
+- **RLS対応**: Supabaseでのテナント間データ分離
+- **環境変数**: 機密情報の安全な管理
 
-## 環境設定
+## 🛠 技術スタック
 
-### 1. 必要な環境変数
+### フロントエンド
+- **Next.js 15**: React フレームワーク
+- **TypeScript**: 型安全性の確保
+- **Tailwind CSS**: スタイリング
+- **Radix UI**: UIコンポーネント
 
-`.env.local`ファイルを作成し、以下の値を設定してください：
+### バックエンド
+- **Next.js API Routes**: サーバーサイドAPI
+- **LINE Bot SDK 10.0.0**: LINE Messaging API
+- **Supabase**: データベース・認証
 
+### インフラ
+- **Vercel**: ホスティング・デプロイ
+- **Supabase**: PostgreSQL データベース
+- **GitHub**: バージョン管理
+
+## 🚀 セットアップ
+
+### 1. リポジトリのクローン
 ```bash
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# LINE Bot (重要: LINE自動応答機能用)
-LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
-LINE_CHANNEL_SECRET=your_line_channel_secret
-
-# OpenAI (重要: AI自動応答機能用)
-OPENAI_API_KEY=your_openai_api_key
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+git clone https://github.com/zuumzuum/doorai-webhook.git
+cd doorai-webhook
 ```
 
-### 2. LINE Developers設定
-
-#### 2.1 LINEアカウント作成・チャンネル作成
-
-1. [LINE Developers](https://developers.line.biz/)にアクセス
-2. LINEアカウントでログイン
-3. 新しいプロバイダーを作成（会社名など）
-4. **Messaging API**チャンネルを作成
-
-#### 2.2 チャンネル設定
-
-1. **チャンネル基本設定**タブ：
-   - チャンネルID、チャンネルシークレットをコピー
-   - `LINE_CHANNEL_SECRET`に設定
-
-2. **Messaging API設定**タブ：
-   - チャンネルアクセストークン（長期）を発行
-   - `LINE_CHANNEL_ACCESS_TOKEN`に設定
-   - **Webhook URLを設定**（重要）:
-     ```
-     https://yourdomain.com/api/webhooks/line
-     ```
-   - Webhook送信を「利用する」に設定
-   - 応答メッセージを「利用しない」に設定（AIで自動応答するため）
-   - あいさつメッセージを「利用しない」に設定
-
-#### 2.3 必要なイベント設定
-
-以下のイベントが自動的に処理されます：
-- **メッセージイベント**: テキストメッセージの自動応答
-- **ポストバックイベント**: ボタンアクション
-- **フォローイベント**: 友だち追加時の顧客登録
-- **アンフォローイベント**: ブロック検知
-
-### 3. OpenAI設定
-
-1. [OpenAI Platform](https://platform.openai.com/)でアカウント作成
-2. API キーを生成
-3. `OPENAI_API_KEY`に設定
-4. GPT-4o（またはGPT-4）のAPIアクセス権限を確認
-
-### 4. Webhook URL
-
-デプロイ後、以下のWebhook URLをLINE Developersに設定：
-
-```
-https://yourdomain.com/api/webhooks/line
-```
-
-**ローカル開発時**は、ngrokなどのトンネリングツールを使用：
-
-```bash
-# ngrokのインストール（初回のみ）
-npm install -g ngrok
-
-# ローカルサーバーを起動
-npm run dev
-
-# 別ターミナルでngrokを起動
-ngrok http 3000
-
-# ngrokのHTTPS URLをLINE Webhookに設定
-# 例: https://abc123.ngrok.io/api/webhooks/line
-```
-
-## Google OAuth設定
-
-### 1. Google Cloud Console設定
-
-1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. プロジェクトを作成または選択
-3. APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client IDs
-4. Application type: Web application
-5. Authorized redirect URIs:
-   ```
-   https://yehltecyjtmnbwbfsbfw.supabase.co/auth/v1/callback
-   ```
-6. Client IDとClient Secretをコピー
-
-### 2. Supabase設定
-
-1. [Supabase Dashboard](https://supabase.com/dashboard)にログイン
-2. プロジェクト → Authentication → Providers → Google
-3. Enable Google provider を ON
-4. Google Cloud ConsoleからコピーしたClient IDとClient Secretを入力
-5. 保存
-
-### 3. リダイレクトURL設定確認
-
-**開発環境**:
-- Authorized redirect URIs: `https://yehltecyjtmnbwbfsbfw.supabase.co/auth/v1/callback`
-- Site URL: `http://localhost:3000`
-
-**本番環境**:
-- Authorized redirect URIs: `https://yehltecyjtmnbwbfsbfw.supabase.co/auth/v1/callback`
-- Site URL: `https://doorai-h63zhawem-zuums-projects.vercel.app`
-
-## LINE API設定
-
-## 開発手順
-
-### 1. 依存関係のインストール
-
+### 2. 依存関係のインストール
 ```bash
 npm install
 ```
 
-### 2. Supabaseマイグレーション実行
-
+### 3. 環境変数の設定
 ```bash
-# Supabaseプロジェクトのリンク
-npx supabase link --project-ref your-project-ref
-
-# マイグレーション実行
-npx supabase db push
+# .env.localファイルを作成
+cp .env.example .env.local
 ```
 
-### 3. 開発サーバー起動
+以下の環境変数を設定：
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
+# その他
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+### 4. 開発サーバーの起動
 ```bash
 npm run dev
 ```
 
-### 4. LINE Bot テスト
+## 📋 LINE Bot設定
 
-1. LINE Developersでテストチャンネルを作成
-2. QRコードで友だち追加
-3. メッセージを送信してAI応答をテスト
+### 1. LINE Developersコンソール
+1. [LINE Developers](https://developers.line.biz/)にログイン
+2. 新しいProviderとMessaging API Channelを作成
+3. Channel SecretとChannel Access Tokenを取得
 
-## API エンドポイント
+### 2. Webhook URL設定
+DoorAIでは以下の形式でWebhook URLを設定：
+```
+https://your-domain.vercel.app/api/webhooks/line?tenantId={YOUR_TENANT_ID}
+```
+
+### 3. 応答設定
+LINE公式アカウントの管理画面で：
+- あいさつメッセージ: **オフ**
+- 応答時間: **オフ** 
+- 応答状況表示: **表示しない**
+
+## 🗂 プロジェクト構造
+
+```
+doorai-webhook/
+├── app/                     # Next.js App Router
+│   ├── api/                 # API Routes
+│   │   ├── webhooks/        # LINE Webhook handlers
+│   │   ├── settings/        # 設定管理API
+│   │   └── tenant/          # テナント管理API
+│   ├── dashboard/           # ダッシュボードページ
+│   ├── login/               # ログイン・認証
+│   └── layout.tsx           # レイアウト
+├── components/              # Reactコンポーネント
+│   ├── ui/                  # UI基底コンポーネント
+│   ├── dashboard.tsx        # ダッシュボード
+│   ├── settings.tsx         # 設定画面
+│   └── customer-management.tsx
+├── lib/                     # ユーティリティ・設定
+│   ├── supabase/           # Supabase設定
+│   ├── line/               # LINE Bot関連
+│   ├── db/                 # データベース操作
+│   └── auth/               # 認証関連
+├── actions/                 # Server Actions
+├── hooks/                   # カスタムフック
+└── middleware.ts            # Next.js Middleware
+```
+
+## 📊 データベース設計
+
+### 主要テーブル
+- **tenants**: テナント（不動産会社）情報
+- **tenant_users**: テナント・ユーザー関係
+- **line_users**: LINEユーザー情報
+- **conversations**: 会話履歴
+- **customers**: 顧客情報
+- **properties**: 物件情報
+
+## 🔧 API エンドポイント
 
 ### LINE Webhook
+- `POST /api/webhooks/line?tenantId={id}` - LINE Webhook受信
 
-- **URL**: `/api/webhooks/line`
-- **Method**: POST
-- **用途**: LINEからのメッセージ・イベント受信
+### 設定管理
+- `GET /api/settings/line?tenantId={id}` - LINE設定取得
+- `POST /api/settings/line` - LINE設定更新
 
-### 主要機能
+### テナント管理
+- `GET /api/tenant/current` - 現在のテナント情報取得
 
-#### 1. AI自動応答システム
+## 🧪 テスト・デバッグ
 
-- **GPT-4o**による不動産専門の営業AI
-- 顧客の過去の履歴を考慮した回答
-- 物件検索・内見予約・資料請求の自動誘導
-- 24時間365日対応
+### デバッグエンドポイント
+- `GET /api/debug/line` - LINE設定診断
+- `GET /api/test/line-debug` - LINE Bot動作テスト
 
-#### 2. 顧客自動管理
+### ログ確認
+```bash
+# Vercelでのログ確認
+vercel logs
+```
 
-- LINE友だち追加時の自動顧客登録
-- メッセージ履歴の自動保存
-- HotScore（興味度）の自動計算
-- 顧客情報の自動抽出（予算・希望エリア等）
+## 🚀 デプロイ
 
-#### 3. 物件検索・提案
+### Vercelへのデプロイ
+1. Vercelアカウントでリポジトリを接続
+2. 環境変数を設定
+3. 自動デプロイが実行される
 
-- 顧客の条件に合った物件の自動検索
-- LINEカルーセル形式での物件紹介
-- 内見予約ボタンによる即座の予約受付
+### 環境変数（本番）
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_production_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_production_supabase_anon_key
+NEXT_PUBLIC_SITE_URL=https://your-domain.vercel.app
+```
 
-## エラー対応
+## 🤝 コントリビューション
 
-### よくある問題
+1. このリポジトリをフォーク
+2. フィーチャーブランチを作成 (`git checkout -b feature/AmazingFeature`)
+3. 変更をコミット (`git commit -m 'Add some AmazingFeature'`)
+4. ブランチにプッシュ (`git push origin feature/AmazingFeature`)
+5. プルリクエストを作成
 
-1. **LINE Webhookエラー**:
-   - Webhook URLが正しく設定されているか確認
-   - HTTPS必須（ローカル開発時はngrok使用）
-   - チャンネルシークレットが正しく設定されているか確認
+## 📝 ライセンス
 
-2. **AI応答しない**:
-   - OpenAI API キーが正しく設定されているか確認
-   - OpenAI APIの利用制限・残高を確認
-   - Supabaseデータベース接続を確認
+このプロジェクトはMITライセンスの下で配布されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
 
-3. **顧客データが保存されない**:
-   - Supabase接続設定を確認
-   - RLS（Row Level Security）ポリシーを確認
-   - データベースマイグレーションが完了しているか確認
+## 🆘 サポート
 
-## ライセンス
+問題が発生した場合：
+1. [Issues](https://github.com/zuumzuum/doorai-webhook/issues)で既存の問題を確認
+2. 新しいIssueを作成して詳細を記載
+3. [Discussions](https://github.com/zuumzuum/doorai-webhook/discussions)で質問・議論
 
-MIT License
+## 📞 お問い合わせ
+
+- 開発者: [@zuumzuum](https://github.com/zuumzuum)
+- プロジェクトリンク: [https://github.com/zuumzuum/doorai-webhook](https://github.com/zuumzuum/doorai-webhook)
+
+---
+
+⭐ このプロジェクトが役に立ったら、ぜひスターを付けてください！
